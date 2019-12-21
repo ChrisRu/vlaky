@@ -16,28 +16,25 @@ case class Train(
                   Carrier: String,
                 )
 
-// https://www.zelpage.cz/razeni/20/vlaky/cd-4720
-
 object Main extends App {
-  def get_trains(route: String) = {
-    val browser = JsoupBrowser()
-    val doc = browser.get("https://www.zelpage.cz/razeni/20/vlaky/" ++ route)
+  def get_trains(year: String, route: String) = {
+    val url = s"https://www.zelpage.cz/razeni/$year/vlaky/$route"
+    val document = JsoupBrowser().get(url)
 
-    val rows = doc >> elementList(".ramecek_raz tr")
+    val rows = document >> elementList(".ramecek_raz tr")
 
-    var trainRowsList = new ListBuffer[ListBuffer[Element]]()
-    trainRowsList += new ListBuffer[Element]()
+    var groupedRows = new ListBuffer[ListBuffer[Element]]()
+    groupedRows += new ListBuffer[Element]()
     for (row <- rows) {
-      if (trainRowsList.length > 0)
-        trainRowsList.last.addOne(row)
+      if (groupedRows.length > 0)
+        groupedRows.last.addOne(row)
 
       if ((row >> allText).startsWith("Dopravce vlaku:")) {
-        trainRowsList += new ListBuffer[Element]()
+        groupedRows += new ListBuffer[Element]()
       }
     }
 
-    val trains = new ListBuffer[Train]()
-    for (trainRows <- trainRowsList) {
+    val trains = groupedRows.map(trainRows => {
       var variant: Option[String] = None
       var cars: Seq[String] = List()
       var updated = ""
@@ -52,7 +49,7 @@ object Main extends App {
 
         trainRow >?> element(".obsah_raz") match {
           case None =>
-          case Some(trainElement: Element) =>
+          case Some(trainElement) =>
             val trainImages = trainElement >> elementList("img").map(_ >> attr("src"))
             cars = trainImages.map(get_train_name_from_url)
         }
@@ -70,10 +67,10 @@ object Main extends App {
         }
       }
 
-      trains.addOne(Train(variant, cars, updated, updatedBy, notes, carrier))
-    }
+      Train(variant, cars, updated, updatedBy, notes, carrier)
+    })
 
-    trains.take(trains.length - 1).toList foreach println
+    trains.take(trains.length - 1).toSeq
   }
 
   def get_train_name_from_url(url: String) = {
@@ -82,9 +79,9 @@ object Main extends App {
 
 
   println("cd-4720")
-  get_trains("cd-4720")
+  get_trains("20", "cd-4720") foreach println
 
   println("")
   println("cd-19900")
-  get_trains("cd-19900")
+  get_trains("20", "cd-19900") foreach println
 }
