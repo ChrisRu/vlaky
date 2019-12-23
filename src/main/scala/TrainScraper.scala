@@ -37,7 +37,7 @@ object TrainScraper {
           val column = row >> element("td")
 
           if ((row >> allText).startsWith("Dopravce vlaku:"))
-            groups :+ List(column)
+            groups.init :+ (groups.last :+ column) :+ List()
           else
             groups.init :+ (groups.last :+ column)
         })
@@ -132,6 +132,6 @@ object TrainScraper {
 
     // Remove last element from list because the row grouping doesn't know
     // how many trains there are and always creates an extra one.
-    TrainDetails(title, track, trains.take(trains.length - 1).toList)
+    TrainDetails(title, track, trains.take(trains.length - 1))
   }
 }
