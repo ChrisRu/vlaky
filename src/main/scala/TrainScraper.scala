@@ -33,7 +33,7 @@ object TrainScraper {
 
     val groupedRows =
       (document >> elementList(".ramecek_raz tr"))
-        .foldLeft(List[List[Element]](List()))((groups, row) => {
+        .foldLeft(List(List[Element]()))((groups, row) => {
           val column = row >> element("td")
 
           if ((row >> allText).startsWith("Dopravce vlaku:"))
