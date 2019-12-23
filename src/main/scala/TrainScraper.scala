@@ -19,15 +19,15 @@ final case class Train(
                         carrierURL: Option[String]
                       )
 
-final case class Trains(
-                         title: Option[String],
-                         track: Option[String],
-                         trains: List[Train]
-                       )
+final case class TrainDetails(
+                               title: Option[String],
+                               track: Option[String],
+                               trains: List[Train]
+                             )
 
 
 object TrainScraper {
-  def get_trains(composition: Int, route: String): Trains = {
+  def get_trains(composition: Int, route: String): TrainDetails = {
     val url = s"https://www.zelpage.cz/razeni/$composition/vlaky/$route"
     val document = JsoupBrowser().get(url)
 
@@ -43,13 +43,13 @@ object TrainScraper {
         })
 
     val title = (document >> element(".titulek_raz")).childNodes.toSeq.head match {
-      case TextNode(x) => Some(x.trim)
+      case TextNode(text) => Some(text.trim)
       case _ => None
     }
 
     var track: Option[String] = None
 
-    val trains = groupedRows.map(f = trainRows => {
+    val trains = groupedRows.map(trainRows => {
       var cars: Seq[String] = List()
       var variant: Option[String] = None
       var updated: Option[String] = None
@@ -67,7 +67,7 @@ object TrainScraper {
           track = Some(
             childNodes
               .collect {
-                case TextNode(x) => x.trim
+                case TextNode(text) => text.trim
               }
               .mkString("")
           )
@@ -78,25 +78,24 @@ object TrainScraper {
           variant = Some(
             childNodes
               .collect {
-                case TextNode(x) => x
-                case ElementNode(x) => x.tagName match {
-                  case "img" => x >> attr("alt")
+                case TextNode(text) => text
+                case ElementNode(element) => element.tagName match {
+                  case "img" => element >> attr("alt")
                   case _ => ""
                 }
               }
               .map(_.trim)
               .filter(_.nonEmpty)
-              .mkString("")
+              .mkString(" ")
           )
         }
 
         // Carriages
         val getTrainName = (url: String) => url.split('/').takeRight(1).head.split('.').take(1).head
-        trainRow >?> element(".obsah_raz") match {
-          case None =>
-          case Some(trainElement) =>
-            val trainUrls = trainElement >> elementList("img").map(_ >> attr("src"))
-            cars = trainUrls.map(getTrainName)
+        val trainElement = trainRow >?> element(".obsah_raz")
+        if (trainElement.isDefined) {
+          val trainUrls = trainElement.get >> elementList("img").map(_ >> attr("src"))
+          cars = trainUrls.map(getTrainName)
         }
 
         // Last Updated
@@ -109,11 +108,11 @@ object TrainScraper {
         }
 
         // Notes
-        if ((trainRow >> allText).startsWith("Poznámky k vlaku:")) {
+        if (text.startsWith("Poznámky k vlaku:")) {
           notes = Some(
             childNodes
               .collect {
-                case TextNode(x) => x
+                case TextNode(text) => text
               }
               .map(_.trim)
               .filter(_.nonEmpty)
@@ -122,7 +121,7 @@ object TrainScraper {
         }
 
         // Carrier
-        if ((trainRow >> allText).startsWith("Dopravce vlaku:")) {
+        if (text.startsWith("Dopravce vlaku:")) {
           carrier = Some(trainRow >> element("a") >> allText)
           carrierURL = Some(trainRow >> element("a") >> attr("href"))
         }
@@ -133,6 +132,6 @@ object TrainScraper {
 
     // Remove last element from list because the row grouping doesn't know
     // how many trains there are and always creates an extra one.
-    Trains(title, track, trains.take(trains.length - 1).toList)
+    TrainDetails(title, track, trains.take(trains.length - 1).toList)
   }
 }
