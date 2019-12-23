@@ -1,5 +1,7 @@
 package main
 
+import java.time.LocalTime
+
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
@@ -32,7 +34,8 @@ object Main extends Directives with JsonProtocol {
                 case _ => year
               })
 
-              println(s"Requesting $composition at $route")
+              val date = LocalTime.now()
+              println(s"$date Requesting $composition at $route")
 
               val trains = TrainScraper.get_trains(composition, route)
 
