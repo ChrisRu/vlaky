@@ -67,8 +67,8 @@ object Main extends Directives with JsonProtocol {
     var track: Option[String] = None
 
     val trains = groupedRows.map(f = trainRows => {
-      var variant: Option[String] = None
       var cars: Seq[String] = List()
+      var variant: Option[String] = None
       var updated: Option[String] = None
       var updatedBy: Option[String] = None
       var notes: Option[String] = None
@@ -76,11 +76,13 @@ object Main extends Directives with JsonProtocol {
       var carrierURL: Option[String] = None
 
       for (trainRow <- trainRows) {
-        if ((trainRow >> allText).startsWith("Trasa:")) {
+        val text = trainRow >> allText
+        val childNodes = trainRow.childNodes.toSeq
+
+        // Track
+        if (text.startsWith("Trasa:")) {
           track = Some(
-            trainRow
-              .childNodes
-              .toSeq
+            childNodes
               .collect {
                 case TextNode(x) => x.trim
               }
@@ -88,11 +90,10 @@ object Main extends Directives with JsonProtocol {
           )
         }
 
-        if ((trainRow >> allText).startsWith("Varianta:")) {
+        // Variant
+        if (text.startsWith("Varianta:")) {
           variant = Some(
-            trainRow
-              .childNodes
-              .toSeq
+            childNodes
               .collect {
                 case TextNode(x) => x
                 case ElementNode(x) => x.tagName match {
@@ -106,6 +107,7 @@ object Main extends Directives with JsonProtocol {
           )
         }
 
+        // Carriages
         trainRow >?> element(".obsah_raz") match {
           case None =>
           case Some(trainElement) =>
@@ -113,18 +115,16 @@ object Main extends Directives with JsonProtocol {
             cars = trainImages.map(get_train_name_from_url)
         }
 
-        if ((trainRow >> allText).startsWith("Aktualizace:")) {
-          val content = trainRow >> allText
-
-          updated = ("""\d+\.\d+\.\d+""".r findFirstIn content).map(date_to_iso)
-          updatedBy = ("""\((.+)\)""".r findFirstMatchIn content).map(_.group(1))
+        // Last Updated
+        if (text.startsWith("Aktualizace:")) {
+          updated = ("""\d+\.\d+\.\d+""".r findFirstIn text).map(date_to_iso)
+          updatedBy = ("""\((.+)\)""".r findFirstMatchIn text).map(_.group(1))
         }
 
+        // Notes
         if ((trainRow >> allText).startsWith("Poznámky k vlaku:")) {
           notes = Some(
-            trainRow
-              .childNodes
-              .toSeq
+            childNodes
               .collect {
                 case TextNode(x) => x
               }
@@ -134,6 +134,7 @@ object Main extends Directives with JsonProtocol {
           )
         }
 
+        // Carrier
         if ((trainRow >> allText).startsWith("Dopravce vlaku:")) {
           carrier = Some(trainRow >> element("a") >> allText)
           carrierURL = Some(trainRow >> element("a") >> attr("href"))
