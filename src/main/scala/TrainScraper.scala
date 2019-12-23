@@ -42,10 +42,9 @@ object TrainScraper {
             groups.init :+ (groups.last :+ column)
         })
 
-    val title = (document >> element(".titulek_raz")).childNodes.toSeq.head match {
-      case TextNode(text) => Some(text.trim)
-      case _ => None
-    }
+    val title = (document >?> element(".titulek_raz")).flatMap(_.childNodes.toSeq.headOption.collect {
+      case TextNode(text) => text.trim
+    })
 
     var track: Option[String] = None
 
