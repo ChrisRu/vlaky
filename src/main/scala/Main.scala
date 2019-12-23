@@ -3,25 +3,22 @@ package main
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
-import akka.http.scaladsl.model.DateTime
-import akka.http.scaladsl.server.{Directives, PathMatchers}
-import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.server.Directives
 import akka.stream.{ActorMaterializer, Materializer}
 import net.ruippeixotog.scalascraper.browser.JsoupBrowser
 import net.ruippeixotog.scalascraper.dsl.DSL.Extract._
 import net.ruippeixotog.scalascraper.dsl.DSL._
 import net.ruippeixotog.scalascraper.model._
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
+
+import scala.concurrent.ExecutionContextExecutor
+import scala.io.StdIn
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
-import scala.collection.mutable.ListBuffer
-import scala.concurrent.ExecutionContextExecutor
-import scala.io.StdIn
-
 final case class Train(
                         variant: Option[String],
-                        cars: Seq[String],
+                        carriages: Seq[String],
                         updated: Option[String],
                         updatedBy: Option[String],
                         notes: Option[String],
@@ -29,7 +26,11 @@ final case class Train(
                         carrierURL: Option[String]
                       )
 
-final case class Trains(title: Option[String], track: Option[String], trains: List[Train])
+final case class Trains(
+                         title: Option[String],
+                         track: Option[String],
+                         trains: List[Train]
+                       )
 
 trait JsonProtocol extends SprayJsonSupport with DefaultJsonProtocol {
   implicit val trainFormat: RootJsonFormat[Train] = jsonFormat7(Train)
@@ -37,27 +38,20 @@ trait JsonProtocol extends SprayJsonSupport with DefaultJsonProtocol {
 }
 
 object Main extends Directives with JsonProtocol {
-  def date_to_iso(date: String): String =
-    LocalDate.parse(date, DateTimeFormatter.ofPattern("d.M.yyyy")).format(DateTimeFormatter.ISO_DATE)
-
-  def get_train_name_from_url(url: String): String =
-    url.split('/').takeRight(1).head.split('.').take(1).head
-
   def get_trains(year: Int, route: String): Trains = {
     val url = s"https://www.zelpage.cz/razeni/$year/vlaky/$route"
     val document = JsoupBrowser().get(url)
 
-    val rows = document >> elementList(".ramecek_raz tr")
+    val groupedRows =
+      (document >> elementList(".ramecek_raz tr"))
+        .foldLeft(List[List[Element]](List()))((groups, row) => {
+          val column = row >> element("td")
 
-    var groupedRows = new ListBuffer[ListBuffer[Element]]()
-    groupedRows += new ListBuffer[Element]()
-    for (row <- rows) {
-      if (groupedRows.nonEmpty)
-        groupedRows.last.addOne(row >> element("td"))
-
-      if ((row >> allText).startsWith("Dopravce vlaku:"))
-        groupedRows += new ListBuffer[Element]()
-    }
+          if ((row >> allText).startsWith("Dopravce vlaku:"))
+            groups :+ List(column)
+          else
+            groups.init :+ (groups.last :+ column)
+        })
 
     val title = (document >> element(".titulek_raz")).childNodes.toSeq.head match {
       case TextNode(x) => Some(x.trim)
@@ -108,15 +102,19 @@ object Main extends Directives with JsonProtocol {
         }
 
         // Carriages
+        val getTrainName = (url: String) => url.split('/').takeRight(1).head.split('.').take(1).head
         trainRow >?> element(".obsah_raz") match {
           case None =>
           case Some(trainElement) =>
-            val trainImages = trainElement >> elementList("img").map(_ >> attr("src"))
-            cars = trainImages.map(get_train_name_from_url)
+            val trainUrls = trainElement >> elementList("img").map(_ >> attr("src"))
+            cars = trainUrls.map(getTrainName)
         }
 
         // Last Updated
         if (text.startsWith("Aktualizace:")) {
+          val date_to_iso = (date: String) =>
+            LocalDate.parse(date, DateTimeFormatter.ofPattern("d.M.yyyy")).format(DateTimeFormatter.ISO_DATE)
+
           updated = ("""\d+\.\d+\.\d+""".r findFirstIn text).map(date_to_iso)
           updatedBy = ("""\((.+)\)""".r findFirstMatchIn text).map(_.group(1))
         }
@@ -144,6 +142,8 @@ object Main extends Directives with JsonProtocol {
       Train(variant, cars, updated, updatedBy, notes, carrier, carrierURL)
     })
 
+    // Remove last element from list because the row grouping doesn't know
+    // how many trains there are and always creates an extra one.
     Trains(title, track, trains.take(trains.length - 1).toList)
   }
 
@@ -155,7 +155,7 @@ object Main extends Directives with JsonProtocol {
 
     val route =
       pathPrefix("razeni") {
-        pathPrefix("vlaky" / Segment) {
+        pathPrefix("train" / Segment) {
           route => {
             complete(get_trains(20, route))
           }
@@ -173,11 +173,4 @@ object Main extends Directives with JsonProtocol {
       .flatMap(_.unbind())
       .onComplete(_ => system.terminate())
   }
-
-  //  println("cd-4720")
-  //  get_trains("20", "cd-4720") foreach println
-
-  //  println("")
-  //  println("cd-19900")
-  //  get_trains("20", "cd-19900") foreach println
 }
