@@ -28,6 +28,7 @@ libraryDependencies += "net.ruippeixotog" %% "scala-scraper" % "2.2.0"
 libraryDependencies += "com.typesafe.akka" %% "akka-http"   % "10.1.11"
 libraryDependencies += "com.typesafe.akka" %% "akka-stream" % "2.6.1"
 libraryDependencies += "com.typesafe.akka" %% "akka-http-spray-json" % "10.1.11"
+libraryDependencies += "ch.megard" %% "akka-http-cors" % "0.4.2"
 // Here, `libraryDependencies` is a set of dependencies, and by using `+=`,
 // we're adding the cats dependency to the set of dependencies that sbt will go
 // and fetch when it starts up.

@@ -6,6 +6,7 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import akka.http.scaladsl.server.Directives
 import akka.stream.{ActorMaterializer, Materializer}
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
+import ch.megard.akka.http.cors.scaladsl.CorsDirectives._
 
 import scala.concurrent.ExecutionContextExecutor
 import scala.io.StdIn
@@ -22,19 +23,21 @@ object Main extends Directives with JsonProtocol {
     implicit val materializer: Materializer = ActorMaterializer()
 
     val route =
-      get {
-        pathPrefix("composition" / Segment / "train" / Segment) {
-          (year, route) => {
-            val composition = Integer.parseInt(year.length match {
-              case 4 => if (year.startsWith("20")) year.slice(2, 4) else year
-              case _ => year
-            })
+      cors() {
+        get {
+          pathPrefix("composition" / Segment / "train" / Segment) {
+            (year, route) => {
+              val composition = Integer.parseInt(year.length match {
+                case 4 => if (year.startsWith("20")) year.slice(2, 4) else year
+                case _ => year
+              })
 
-            println(s"Requesting $composition at $route")
+              println(s"Requesting $composition at $route")
 
-            val trains = TrainScraper.get_trains(composition, route)
+              val trains = TrainScraper.get_trains(composition, route)
 
-            complete(trains)
+              complete(trains)
+            }
           }
         }
       }
