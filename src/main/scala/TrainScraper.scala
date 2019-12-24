@@ -43,7 +43,7 @@ object TrainScraper {
         })
 
     val title = (document >?> element(".titulek_raz")).flatMap(_.childNodes.toSeq.headOption.collect {
-      case TextNode(text) => text.trim
+      case TextNode(text) => text.trim.filterNot("„“".toSet)
     })
 
     var track: Option[String] = None
