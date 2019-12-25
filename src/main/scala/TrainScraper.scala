@@ -11,7 +11,9 @@ import java.time.format.DateTimeFormatter
 
 final case class Carriage(
                            name: Option[String],
-                           vkm: Option[String]
+                           vkm: Option[String],
+                           coachNo: Option[Int],
+                           route: Option[String]
 )
 
 final case class Train(
@@ -95,17 +97,46 @@ object TrainScraper {
         }
 
         // Carriages
-        val getCarriageName = (url: String) => url.split('/').takeRight(1).head.split('.').take(1).head
         val getPopupRef = (call: String) => """(?<=')(.*)(?=')""".r findFirstIn call
         val constructCarriage = (url: String, popupId: String) => {
             val ref = getPopupRef(popupId)
 
-            val vkm = ref match {
-              case Some(r) => ("""(?<=\[)(.*)(?=\])""".r findFirstIn (document >> allText(s"#$r > h5")))
+            val (name, vkm) = ref match {
+              case Some(p) => {
+                val popupHead = (document >> allText(s"#$p > h5"))
+
+                val name = """(.*)(?= \[)""".r findFirstIn popupHead
+                val vkm = """(?<=\[)(.*)(?=\])""".r findFirstIn popupHead
+
+                (name, vkm)
+              }
+              case _ => (None, None)
+            }
+
+            val coachNo = ref match {
+              case Some(p) => ("""(?<=\. )(.*)""".r findFirstIn (document >> allText(s"#$p > span:first-of-type"))).map(_.toInt)
               case _ => None
             }
 
-            Carriage(Some(getCarriageName(url)), vkm)
+            val route = ref match {
+              case Some(p) => {
+                val routeWrapped = (document >> element(s"#$p")).childNodes.collect {
+                    case TextNode(text) => text
+                  }
+                  .toSeq
+                  .map(_.trim)
+                  .filter(_.nonEmpty)
+
+                if (routeWrapped.nonEmpty) {
+                  Some(routeWrapped.head)
+                } else {
+                  None
+                }
+              }
+              case _ => None
+            }
+
+            Carriage(name, vkm, coachNo, route)
         }
 
         val trainElement = trainRow >?> element(".obsah_raz") 

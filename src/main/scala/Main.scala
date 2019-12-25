@@ -14,7 +14,7 @@ import scala.concurrent.ExecutionContextExecutor
 import scala.io.StdIn
 
 trait JsonProtocol extends SprayJsonSupport with DefaultJsonProtocol {
-  implicit val carriageFormat: RootJsonFormat[Carriage] = jsonFormat2(Carriage)
+  implicit val carriageFormat: RootJsonFormat[Carriage] = jsonFormat4(Carriage)
   implicit val trainFormat: RootJsonFormat[Train] = jsonFormat7(Train)
   implicit val trainsFormat: RootJsonFormat[TrainDetails] = jsonFormat3(TrainDetails)
 }
