@@ -1,7 +1,7 @@
 package main
 
 import net.ruippeixotog.scalascraper.model.{Element, ElementNode, TextNode}
-import net.ruippeixotog.scalascraper.scraper.ContentExtractors.{attr, element, elementList}
+import net.ruippeixotog.scalascraper.scraper.ContentExtractors.{attr, element, elementList, allText}
 import net.ruippeixotog.scalascraper.browser.JsoupBrowser
 import net.ruippeixotog.scalascraper.dsl.DSL.Extract._
 import net.ruippeixotog.scalascraper.dsl.DSL._
@@ -9,9 +9,14 @@ import net.ruippeixotog.scalascraper.dsl.DSL._
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
+final case class Carriage(
+                           name: Option[String],
+                           vkm: Option[String]
+)
+
 final case class Train(
                         variant: Option[String],
-                        carriages: Seq[String],
+                        carriages: List[Carriage],
                         updated: Option[String],
                         updatedBy: Option[String],
                         notes: Option[String],
@@ -49,7 +54,7 @@ object TrainScraper {
     var track: Option[String] = None
 
     val trains = groupedRows.map(trainRows => {
-      var cars: Seq[String] = List()
+      var carriages: List[Carriage] = List()
       var variant: Option[String] = None
       var updated: Option[String] = None
       var updatedBy: Option[String] = None
@@ -90,11 +95,26 @@ object TrainScraper {
         }
 
         // Carriages
-        val getTrainName = (url: String) => url.split('/').takeRight(1).head.split('.').take(1).head
-        val trainElement = trainRow >?> element(".obsah_raz")
+        val getCarriageName = (url: String) => url.split('/').takeRight(1).head.split('.').take(1).head
+        val getPopupRef = (call: String) => """(?<=')(.*)(?=')""".r findFirstIn call
+        val constructCarriage = (url: String, popupId: String) => {
+            val ref = getPopupRef(popupId)
+
+            val vkm = ref match {
+              case Some(r) => ("""(?<=\[)(.*)(?=\])""".r findFirstIn (document >> allText(s"#$r > h5")))
+              case _ => None
+            }
+
+            Carriage(Some(getCarriageName(url)), vkm)
+        }
+
+        val trainElement = trainRow >?> element(".obsah_raz") 
         if (trainElement.isDefined) {
-          val trainUrls = trainElement.get >> elementList("img").map(_ >> attr("src"))
-          cars = trainUrls.map(getTrainName)
+          val trainDetails = trainElement.get >> elementList("img").map(_ >> (attr("src"), attr("onmouseover")))
+
+          carriages = trainDetails
+            .filterNot(_._1.contains("spacer"))
+            .map(d => constructCarriage(d._1, d._2))
         }
 
         // Last Updated
@@ -126,7 +146,7 @@ object TrainScraper {
         }
       }
 
-      Train(variant, cars, updated, updatedBy, notes, carrier, carrierURL)
+      Train(variant, carriages, updated, updatedBy, notes, carrier, carrierURL)
     })
 
     // Remove last element from list because the row grouping doesn't know
