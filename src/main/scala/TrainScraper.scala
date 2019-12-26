@@ -1,6 +1,6 @@
 package main
 
-import net.ruippeixotog.scalascraper.model.{Document, Element, ElementNode, TextNode}
+import net.ruippeixotog.scalascraper.model.{Document, Element, ElementNode, TextNode, Node}
 import net.ruippeixotog.scalascraper.scraper.ContentExtractors.{allText, attr, element, elementList}
 import net.ruippeixotog.scalascraper.browser.{Browser, JsoupBrowser}
 import net.ruippeixotog.scalascraper.dsl.DSL._
@@ -18,7 +18,7 @@ final case class Train(
                         carriages: Seq[Carriage],
                         updated: Option[String],
                         updatedBy: Option[String],
-                        notes: Option[String],
+                        notes: Option[Seq[String]],
                         carrier: Option[String],
                         carrierURL: Option[String]
                       )
@@ -57,7 +57,7 @@ object TrainScraper {
       var variant: Option[String] = None
       var updated: Option[String] = None
       var updatedBy: Option[String] = None
-      var notes: Option[String] = None
+      var notes: Option[Seq[String]] = None
       var carrier: Option[String] = None
       var carrierURL: Option[String] = None
 
@@ -91,13 +91,7 @@ object TrainScraper {
         // Notes
         if (text.startsWith("Poznámky k vlaku:")) {
           notes = Some(
-            childNodes
-              .collect {
-                case TextNode(text) => text
-              }
-              .map(_.trim)
-              .filter(_.nonEmpty)
-              .mkString("\n")
+            getNotes(childNodes)
           )
         }
 
@@ -130,6 +124,45 @@ object TrainScraper {
     // Remove last element from list because the row grouping doesn't know
     // how many trains there are and always creates an extra one.
     TrainDetails(title, trains.take(trains.length - 1), route)
+  }
+
+  def parseLeadingIcon(note: Seq[Node]): String = {
+    note.drop(2).collect {case TextNode(text) => text}.map(_.trim).filter(_.nonEmpty).mkString("")
+  }
+
+  def parseRegularLine(note: Seq[Node]): String = {
+    note.map(part => part match {
+      case TextNode(text) => text
+      case ElementNode(element) => element.tagName match {
+        case "a" => element >> allText
+        case "img" => element >> attr("alt")
+      }
+    }).map(_.trim).filter(_.nonEmpty).mkString("")
+  }
+
+  def getNotes(children: Seq[Node]): Seq[String] = {
+    children.foldLeft(Seq(Seq[Node]()))((groups, row) => {
+      row match {
+        case ElementNode(element) => element.tagName match {
+          case "br" => groups.init :+ (groups.last) :+ Seq()
+          case _ => groups.init :+ (groups.last :+ row)
+        }
+        
+        case _ => groups.init :+ (groups.last :+ row)
+      }
+    }).init.tail.map(n => {
+      n.head match {
+        case TextNode(text) => text match {
+          case "" => n.lift(1) match {
+            case Some(ElementNode(element)) => element.tagName match {
+              case "img" => parseLeadingIcon(n)
+              case _ => parseRegularLine(n)
+            }
+          }
+          case _ => parseRegularLine(n)
+        }
+      }
+    })
   }
 
   def getCarriage(document: Document, id: String, img: String): Carriage = {
