@@ -1,6 +1,6 @@
 package main
 
-import net.ruippeixotog.scalascraper.model.{Element, ElementNode, TextNode}
+import net.ruippeixotog.scalascraper.model.{Document, Element, ElementNode, TextNode}
 import net.ruippeixotog.scalascraper.scraper.ContentExtractors.{allText, attr, element, elementList}
 import net.ruippeixotog.scalascraper.browser.{Browser, JsoupBrowser}
 import net.ruippeixotog.scalascraper.dsl.DSL._
@@ -31,12 +31,16 @@ final case class TrainDetails(
 
 
 object TrainScraper {
-  def loadDocument(composition: Int, route: String): Browser#DocumentType = {
+  def loadDocument(composition: Int, route: String): Document = {
     val url = s"https://www.zelpage.cz/razeni/$composition/vlaky/$route"
     JsoupBrowser().get(url)
   }
 
-  def getTrainDetails(document: Browser#DocumentType, route: Seq[Route] = Seq()): TrainDetails = {
+  def getTrainDetails(document: Document, route: Seq[Route] = Seq()): TrainDetails = {
+    val title = (document >?> element(".titulek_raz")).flatMap(_.childNodes.toSeq.headOption.collect {
+      case TextNode(text) => text.trim.filterNot("„“".toSet)
+    })
+
     val groupedRows =
       (document >> elementList(".ramecek_raz tr"))
         .foldLeft(Seq(Seq[Element]()))((groups, row) => {
@@ -48,12 +52,7 @@ object TrainScraper {
             groups.init :+ (groups.last :+ column)
         })
 
-    val title = (document >?> element(".titulek_raz")).flatMap(_.childNodes.toSeq.headOption.collect {
-      case TextNode(text) => text.trim.filterNot("„“".toSet)
-    })
-
     var track: Option[String] = None
-
     val trains = groupedRows.map(trainRows => {
       var carriages: Seq[Carriage] = Seq()
       var variant: Option[String] = None
@@ -142,7 +141,7 @@ object TrainScraper {
     TrainDetails(title, track, trains.take(trains.length - 1), route)
   }
 
-  def getCarriage(document: Browser#DocumentType, id: String): Carriage = {
+  def getCarriage(document: Document, id: String): Carriage = {
     val carriageElement = document >> element(s"#$id")
 
     val (name, vkm) = {

@@ -9,8 +9,9 @@ import akka.http.scaladsl.server.Directives
 import akka.stream.{ActorMaterializer, Materializer}
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 import ch.megard.akka.http.cors.scaladsl.CorsDirectives._
+import net.ruippeixotog.scalascraper.model.Document
 
-import scala.concurrent.ExecutionContextExecutor
+import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.io.StdIn
 
 trait JsonProtocol extends SprayJsonSupport with DefaultJsonProtocol {
@@ -39,13 +40,24 @@ object Main extends Directives with JsonProtocol {
               val date = LocalTime.now()
               println(s"$date — Requesting train $route (20$composition timetable)")
 
-              val trainRouteDocument = TrainRouteScraper.loadDocument(composition, route)
-              val trainRoute = TrainRouteScraper.getRoute(trainRouteDocument)
+              val trainRouteDocumentFuture = Future {
+                TrainRouteScraper.loadDocument(composition, route)
+              }
+              val trainDocumentFuture = Future {
+                TrainScraper.loadDocument(composition, route)
+              }
 
-              val trainDocument = TrainScraper.loadDocument(composition, route)
-              val trainDetails = TrainScraper.getTrainDetails(trainDocument, trainRoute)
+              val trainDetails = for {
+                trainDocument <- trainDocumentFuture
+                trainRouteDocument <- trainRouteDocumentFuture
 
-              complete(trainDetails)
+                trainRoute = TrainRouteScraper.getRoute(trainRouteDocument)
+                trainDetails = TrainScraper.getTrainDetails(trainDocument, trainRoute)
+              } yield trainDetails
+
+              onSuccess(trainDetails) {
+                trainDetails => complete(trainDetails)
+              }
             }
           }
         }

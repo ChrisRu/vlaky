@@ -3,6 +3,7 @@ package main
 import net.ruippeixotog.scalascraper.scraper.ContentExtractors.{allText, element, elementList}
 import net.ruippeixotog.scalascraper.browser.{Browser, JsoupBrowser}
 import net.ruippeixotog.scalascraper.dsl.DSL._
+import net.ruippeixotog.scalascraper.model.Document
 
 final case class Route(
                         station: String,
@@ -14,12 +15,12 @@ final case class Route(
                       )
 
 object TrainRouteScraper {
-  def loadDocument(composition: Int, route: String): Browser#DocumentType = {
+  def loadDocument(composition: Int, route: String): Document = {
     val url = s"https://www.zelpage.cz/razeni/$composition/trasa-vlaku/$route"
     JsoupBrowser().get(url)
   }
 
-  def getRoute(document: Browser#DocumentType): Seq[Route] = {
+  def getRoute(document: Document): Seq[Route] = {
     val table = (document >> elementList(".ramecek_raz table")).lift(1)
     val rows = table match {
       case Some(table) => (table >> elementList("tr")).drop(1)
