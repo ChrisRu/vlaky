@@ -1,6 +1,6 @@
 # Vlaky
 
-Web scraping for zelpage.cz to turn it into a API.
+Web scraping for zelpage.cz to turn it into an API.
 
 ## Running
 
@@ -17,6 +17,6 @@ This project was built using [sbt](https://www.scala-sbt.org/) and requires it f
 
 ## API Routes
 
-- GET `/composition/{year}/train/{route}`
+- GET `/composition/{year}/train/{identifier}`
 
-  Get train composition and details for a specific train.
+  Get train composition and details for a specific train. Train identifier format is along the lines of `cd-4725`, `rj-1032`, etc.

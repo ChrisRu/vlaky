@@ -24,7 +24,6 @@ final case class Train(
 
 final case class TrainDetails(
                                title: Option[String],
-                               track: Option[String],
                                trains: Seq[Train],
                                route: Seq[Route]
                              )
@@ -52,7 +51,6 @@ object TrainScraper {
             groups.init :+ (groups.last :+ column)
         })
 
-    var track: Option[String] = None
     val trains = groupedRows.map(trainRows => {
       var carriages: Seq[Carriage] = Seq()
       var variant: Option[String] = None
@@ -65,17 +63,6 @@ object TrainScraper {
       for (trainRow <- trainRows) {
         val text = trainRow >> allText
         val childNodes = trainRow.childNodes.toSeq
-
-        // Track
-        if (text.startsWith("Trasa:")) {
-          track = Some(
-            childNodes
-              .collect {
-                case TextNode(text) => text.trim
-              }
-              .mkString("")
-          )
-        }
 
         // Variant
         if (text.startsWith("Varianta:")) {
@@ -138,7 +125,7 @@ object TrainScraper {
 
     // Remove last element from list because the row grouping doesn't know
     // how many trains there are and always creates an extra one.
-    TrainDetails(title, track, trains.take(trains.length - 1), route)
+    TrainDetails(title, trains.take(trains.length - 1), route)
   }
 
   def getCarriage(document: Document, id: String): Carriage = {

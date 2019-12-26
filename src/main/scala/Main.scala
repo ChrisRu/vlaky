@@ -18,7 +18,7 @@ trait JsonProtocol extends SprayJsonSupport with DefaultJsonProtocol {
   implicit val carriageFormat: RootJsonFormat[Carriage] = jsonFormat4(Carriage)
   implicit val routeFormat: RootJsonFormat[Route] = jsonFormat6(Route)
   implicit val trainFormat: RootJsonFormat[Train] = jsonFormat7(Train)
-  implicit val trainsFormat: RootJsonFormat[TrainDetails] = jsonFormat4(TrainDetails)
+  implicit val trainsFormat: RootJsonFormat[TrainDetails] = jsonFormat3(TrainDetails)
 }
 
 object Main extends Directives with JsonProtocol {
