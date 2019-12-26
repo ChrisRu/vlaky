@@ -7,6 +7,7 @@ import net.ruippeixotog.scalascraper.dsl.DSL._
 
 final case class Carriage(
                            name: String,
+                           livery: String,
                            vkm: String,
                            coachNo: Option[Int],
                            route: Option[String]
@@ -106,16 +107,19 @@ object TrainScraper {
           carrierURL = Some(trainRow >> element("a") >> attr("href"))
         }
 
+
         // Carriages
         val trainElement = trainRow >?> element(".obsah_raz")
         if (trainElement.isDefined) {
           carriages = (trainElement.get >> elementList("img"))
             .filterNot(_.attr("src").contains("spacer"))
-            .map(_ >> attr("onmouseover"))
-            .map(js => """(?<=')(.*)(?=')""".r findFirstIn js)
+            .map(_ >> (attr("src"), attr("onmouseover")))
             .map {
-              case Some(id) => getCarriage(document, id)
-              case None => Carriage("", "", None, None)
+              case (img, js) => (img, """(?<=')(.*)(?=')""".r findFirstIn js)
+            }
+            .map {
+              case (img, Some(id)) => getCarriage(document, id, img)
+              case (_, None) => Carriage("", "", "", None, None)
             }
         }
       }
@@ -128,7 +132,8 @@ object TrainScraper {
     TrainDetails(title, trains.take(trains.length - 1), route)
   }
 
-  def getCarriage(document: Document, id: String): Carriage = {
+  def getCarriage(document: Document, id: String, img: String): Carriage = {
+    val livery = img.split('/').takeRight(1).head.split('.').take(1).head
     val carriageElement = document >> element(s"#$id")
 
     val (name, vkm) = {
@@ -155,6 +160,6 @@ object TrainScraper {
       .map(_.trim)
       .find(_.nonEmpty)
 
-    Carriage(name, vkm, coachNo, route)
+    Carriage(name, livery, vkm, coachNo, route)
   }
 }
