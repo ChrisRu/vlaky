@@ -4,8 +4,6 @@ import net.ruippeixotog.scalascraper.model.{Element, ElementNode, TextNode}
 import net.ruippeixotog.scalascraper.scraper.ContentExtractors.{allText, attr, element, elementList}
 import net.ruippeixotog.scalascraper.browser.{Browser, JsoupBrowser}
 import net.ruippeixotog.scalascraper.dsl.DSL._
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 
 final case class Carriage(
                            name: String,
@@ -27,7 +25,8 @@ final case class Train(
 final case class TrainDetails(
                                title: Option[String],
                                track: Option[String],
-                               trains: List[Train]
+                               trains: Seq[Train],
+                               route: Seq[Route]
                              )
 
 
@@ -37,14 +36,14 @@ object TrainScraper {
     JsoupBrowser().get(url)
   }
 
-  def getTrains(document: Browser#DocumentType): TrainDetails = {
+  def getTrainDetails(document: Browser#DocumentType, route: Seq[Route] = Seq()): TrainDetails = {
     val groupedRows =
       (document >> elementList(".ramecek_raz tr"))
-        .foldLeft(List(List[Element]()))((groups, row) => {
+        .foldLeft(Seq(Seq[Element]()))((groups, row) => {
           val column = row >> element("td")
 
           if ((row >> allText).startsWith("Dopravce vlaku:"))
-            groups.init :+ (groups.last :+ column) :+ List()
+            groups.init :+ (groups.last :+ column) :+ Seq()
           else
             groups.init :+ (groups.last :+ column)
         })
@@ -98,7 +97,7 @@ object TrainScraper {
 
         // Last Updated
         if (text.startsWith("Aktualizace:")) {
-          updated = ("""\d+\.\d+\.\d+""".r findFirstIn text).map(dateToISO)
+          updated = ("""\d+\.\d+\.\d+""".r findFirstIn text).flatMap(Format.dateToISO)
           updatedBy = ("""\((.+)\)""".r findFirstMatchIn text).map(_.group(1))
         }
 
@@ -140,7 +139,7 @@ object TrainScraper {
 
     // Remove last element from list because the row grouping doesn't know
     // how many trains there are and always creates an extra one.
-    TrainDetails(title, track, trains.take(trains.length - 1))
+    TrainDetails(title, track, trains.take(trains.length - 1), route)
   }
 
   def getCarriage(document: Browser#DocumentType, id: String): Carriage = {
@@ -159,7 +158,7 @@ object TrainScraper {
       val spanText = carriageElement >> allText("span:first-of-type")
       val pattern = """(?<=\. )(.*)""".r
       (pattern findFirstIn spanText)
-        .map(_.toInt)
+        .flatMap(_.toIntOption)
     }
 
     val route = carriageElement
@@ -172,7 +171,4 @@ object TrainScraper {
 
     Carriage(name, vkm, coachNo, route)
   }
-
-  def dateToISO(date: String): String =
-    LocalDate.parse(date, DateTimeFormatter.ofPattern("d.M.yyyy")).format(DateTimeFormatter.ISO_DATE)
 }

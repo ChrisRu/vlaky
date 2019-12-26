@@ -15,8 +15,9 @@ import scala.io.StdIn
 
 trait JsonProtocol extends SprayJsonSupport with DefaultJsonProtocol {
   implicit val carriageFormat: RootJsonFormat[Carriage] = jsonFormat4(Carriage)
+  implicit val routeFormat: RootJsonFormat[Route] = jsonFormat6(Route)
   implicit val trainFormat: RootJsonFormat[Train] = jsonFormat7(Train)
-  implicit val trainsFormat: RootJsonFormat[TrainDetails] = jsonFormat3(TrainDetails)
+  implicit val trainsFormat: RootJsonFormat[TrainDetails] = jsonFormat4(TrainDetails)
 }
 
 object Main extends Directives with JsonProtocol {
@@ -38,10 +39,13 @@ object Main extends Directives with JsonProtocol {
               val date = LocalTime.now()
               println(s"$date — Requesting train $route (20$composition timetable)")
 
-              val document = TrainScraper.loadDocument(composition, route)
-              val trains = TrainScraper.getTrains(document)
+              val trainRouteDocument = TrainRouteScraper.loadDocument(composition, route)
+              val trainRoute = TrainRouteScraper.getRoute(trainRouteDocument)
 
-              complete(trains)
+              val trainDocument = TrainScraper.loadDocument(composition, route)
+              val trainDetails = TrainScraper.getTrainDetails(trainDocument, trainRoute)
+
+              complete(trainDetails)
             }
           }
         }

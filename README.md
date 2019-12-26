@@ -1,6 +1,6 @@
 # Vlaky
 
-Web scraping for zelpage.cz to turn it into a real API.
+Web scraping for zelpage.cz to turn it into a API.
 
 ## Running
 
