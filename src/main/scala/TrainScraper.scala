@@ -1,11 +1,9 @@
 package main
 
 import net.ruippeixotog.scalascraper.model.{Element, ElementNode, TextNode}
-import net.ruippeixotog.scalascraper.scraper.ContentExtractors.{attr, element, elementList, allText}
-import net.ruippeixotog.scalascraper.browser.JsoupBrowser
-import net.ruippeixotog.scalascraper.dsl.DSL.Extract._
+import net.ruippeixotog.scalascraper.scraper.ContentExtractors.{allText, attr, element, elementList}
+import net.ruippeixotog.scalascraper.browser.{Browser, JsoupBrowser}
 import net.ruippeixotog.scalascraper.dsl.DSL._
-
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -14,11 +12,11 @@ final case class Carriage(
                            vkm: Option[String],
                            coachNo: Option[Int],
                            route: Option[String]
-)
+                         )
 
 final case class Train(
                         variant: Option[String],
-                        carriages: List[Carriage],
+                        carriages: Seq[Carriage],
                         updated: Option[String],
                         updatedBy: Option[String],
                         notes: Option[String],
@@ -34,7 +32,42 @@ final case class TrainDetails(
 
 
 object TrainScraper {
-  def get_trains(composition: Int, route: String): TrainDetails = {
+  def dateToISO(date: String): String =
+    LocalDate.parse(date, DateTimeFormatter.ofPattern("d.M.yyyy")).format(DateTimeFormatter.ISO_DATE)
+
+  def getCarriage(document: Browser#DocumentType, popupId: String): Carriage = {
+    val carriageId = """(?<=')(.*)(?=')""".r findFirstIn popupId
+    val carriageElement = carriageId.map(id => document >> element(s"#$id"))
+
+    val (name, vkm) = carriageElement match {
+      case Some(e) =>
+        val popupHead = e >> allText("h5")
+
+        val pattern = """(.+) \[(.+)\]""".r
+        val pattern(name, vkm) = popupHead
+
+        (Some(name), Some(vkm))
+      case None => (None, None)
+    }
+
+    val coachNo = carriageElement.flatMap(e =>
+      ("""(?<=\. )(.*)""".r findFirstIn (e >> allText("span:first-of-type"))
+        )
+        .map(_.toInt)
+    )
+
+    val route = carriageElement.flatMap(
+      _.childNodes.collect {
+        case TextNode(text) => text
+      }
+        .map(_.trim)
+        .find(_.nonEmpty)
+    )
+
+    Carriage(name, vkm, coachNo, route)
+  }
+
+  def getTrains(composition: Int, route: String): TrainDetails = {
     val url = s"https://www.zelpage.cz/razeni/$composition/vlaky/$route"
     val document = JsoupBrowser().get(url)
 
@@ -56,7 +89,7 @@ object TrainScraper {
     var track: Option[String] = None
 
     val trains = groupedRows.map(trainRows => {
-      var carriages: List[Carriage] = List()
+      var carriages: Seq[Carriage] = Seq()
       var variant: Option[String] = None
       var updated: Option[String] = None
       var updatedBy: Option[String] = None
@@ -97,63 +130,16 @@ object TrainScraper {
         }
 
         // Carriages
-        val getPopupRef = (call: String) => """(?<=')(.*)(?=')""".r findFirstIn call
-        val constructCarriage = (url: String, popupId: String) => {
-            val ref = getPopupRef(popupId)
-
-            val (name, vkm) = ref match {
-              case Some(p) => {
-                val popupHead = (document >> allText(s"#$p > h5"))
-
-                val name = """(.*)(?= \[)""".r findFirstIn popupHead
-                val vkm = """(?<=\[)(.*)(?=\])""".r findFirstIn popupHead
-
-                (name, vkm)
-              }
-              case _ => (None, None)
-            }
-
-            val coachNo = ref match {
-              case Some(p) => ("""(?<=\. )(.*)""".r findFirstIn (document >> allText(s"#$p > span:first-of-type"))).map(_.toInt)
-              case _ => None
-            }
-
-            val route = ref match {
-              case Some(p) => {
-                val routeWrapped = (document >> element(s"#$p")).childNodes.collect {
-                    case TextNode(text) => text
-                  }
-                  .toSeq
-                  .map(_.trim)
-                  .filter(_.nonEmpty)
-
-                if (routeWrapped.nonEmpty) {
-                  Some(routeWrapped.head)
-                } else {
-                  None
-                }
-              }
-              case _ => None
-            }
-
-            Carriage(name, vkm, coachNo, route)
-        }
-
-        val trainElement = trainRow >?> element(".obsah_raz") 
+        val trainElement = trainRow >?> element(".obsah_raz")
         if (trainElement.isDefined) {
-          val trainDetails = trainElement.get >> elementList("img").map(_ >> (attr("src"), attr("onmouseover")))
-
-          carriages = trainDetails
-            .filterNot(_._1.contains("spacer"))
-            .map(d => constructCarriage(d._1, d._2))
+          carriages = (trainElement.get >> elementList("img"))
+            .filterNot(_.attr("src").contains("spacer"))
+            .map(e => getCarriage(document, e >> attr("onmouseover")))
         }
 
         // Last Updated
         if (text.startsWith("Aktualizace:")) {
-          val date_to_iso = (date: String) =>
-            LocalDate.parse(date, DateTimeFormatter.ofPattern("d.M.yyyy")).format(DateTimeFormatter.ISO_DATE)
-
-          updated = ("""\d+\.\d+\.\d+""".r findFirstIn text).map(date_to_iso)
+          updated = ("""\d+\.\d+\.\d+""".r findFirstIn text).map(dateToISO)
           updatedBy = ("""\((.+)\)""".r findFirstMatchIn text).map(_.group(1))
         }
 
@@ -172,7 +158,7 @@ object TrainScraper {
 
         // Carrier
         if (text.startsWith("Dopravce vlaku:")) {
-          carrier = Some(trainRow >> element("a") >> allText)
+          carrier = Some(trainRow >> allText("a"))
           carrierURL = Some(trainRow >> element("a") >> attr("href"))
         }
       }

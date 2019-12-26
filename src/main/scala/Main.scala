@@ -38,7 +38,7 @@ object Main extends Directives with JsonProtocol {
               val date = LocalTime.now()
               println(s"$date — Requesting train $route (20$composition timetable)")
 
-              val trains = TrainScraper.get_trains(composition, route)
+              val trains = TrainScraper.getTrains(composition, route)
 
               complete(trains)
             }
