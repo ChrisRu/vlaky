@@ -9,7 +9,6 @@ import akka.http.scaladsl.server.Directives
 import akka.stream.{ActorMaterializer, Materializer}
 import spray.json.{DefaultJsonProtocol, RootJsonFormat}
 import ch.megard.akka.http.cors.scaladsl.CorsDirectives._
-import net.ruippeixotog.scalascraper.model.Document
 
 import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.io.StdIn
