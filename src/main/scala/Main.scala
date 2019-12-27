@@ -14,6 +14,7 @@ import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.io.StdIn
 
 trait JsonProtocol extends SprayJsonSupport with DefaultJsonProtocol {
+  implicit val departureFormat: RootJsonFormat[Departure] = jsonFormat8(Departure)
   implicit val carriageFormat: RootJsonFormat[Carriage] = jsonFormat5(Carriage)
   implicit val routeFormat: RootJsonFormat[Route] = jsonFormat6(Route)
   implicit val trainFormat: RootJsonFormat[Train] = jsonFormat7(Train)
@@ -29,36 +30,44 @@ object Main extends Directives with JsonProtocol {
     val route =
       cors() {
         get {
-          pathPrefix("composition" / Segment / "train" / Segment) {
-            (year, route) => {
-              val composition = Integer.parseInt(year.length match {
-                case 4 => if (year.startsWith("20")) year.slice(2, 4) else year
-                case _ => year
-              })
+          concat(
+            pathPrefix("composition" / Segment / "train" / Segment) {
+              (year, route) => {
+                val composition = Integer.parseInt(year.length match {
+                  case 4 => if (year.startsWith("20")) year.slice(2, 4) else year
+                  case _ => year
+                })
 
-              val date = LocalTime.now()
-              println(s"$date — Requesting train $route (20$composition timetable)")
+                val date = LocalTime.now()
+                println(s"$date — Requesting train $route (20$composition timetable)")
 
-              val trainRouteDocumentFuture = Future {
-                TrainRouteScraper.loadDocument(composition, route)
+                val trainRouteDocumentFuture = Future {
+                  TrainRouteScraper.loadDocument(composition, route)
+                }
+                val trainDocumentFuture = Future {
+                  TrainScraper.loadDocument(composition, route)
+                }
+
+                val trainDetails = for {
+                  trainDocument <- trainDocumentFuture
+                  trainRouteDocument <- trainRouteDocumentFuture
+
+                  trainRoute = TrainRouteScraper.getRoute(trainRouteDocument)
+                  trainDetails = TrainScraper.getTrainDetails(trainDocument, trainRoute)
+                } yield trainDetails
+
+                onSuccess(trainDetails) {
+                  trainDetails => complete(trainDetails)
+                }
               }
-              val trainDocumentFuture = Future {
-                TrainScraper.loadDocument(composition, route)
+            },
+            pathPrefix("departures" / Segment) {
+              station => {
+                val departuresDocument = TrainDepartures.loadDocument(station)
+                val departures = TrainDepartures.getDepartures(departuresDocument)
+                complete(departures)
               }
-
-              val trainDetails = for {
-                trainDocument <- trainDocumentFuture
-                trainRouteDocument <- trainRouteDocumentFuture
-
-                trainRoute = TrainRouteScraper.getRoute(trainRouteDocument)
-                trainDetails = TrainScraper.getTrainDetails(trainDocument, trainRoute)
-              } yield trainDetails
-
-              onSuccess(trainDetails) {
-                trainDetails => complete(trainDetails)
-              }
-            }
-          }
+            })
         }
       }
 

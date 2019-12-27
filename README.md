@@ -20,3 +20,7 @@ This project was built using [sbt](https://www.scala-sbt.org/) and requires it f
 - GET `/composition/{year}/train/{identifier}`
 
   Get train composition and details for a specific train. Train identifier format is along the lines of `cd-4725`, `rj-1032`, etc.
+  
+- GET `/departures/{station}`
+
+  Get departures for a station. Station format is just `brno` or `wien-hbf`
